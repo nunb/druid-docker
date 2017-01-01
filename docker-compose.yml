@@ -1,0 +1,275 @@
+zookeeper:
+  image: jplock/zookeeper:3.4.6
+  ports:
+    - "2181:2181"
+
+postgres:
+  build: ./postgres
+  ports:
+    - "5432:5432"
+
+hadoop: #used for both HDFS deep storage and Hadoop batch indexing
+  image: sequenceiq/hadoop-docker:2.4.1
+  #build: ./hadoop #putting hostname into core-site.xml is fixed in later versions, but not 2.3.0
+  volumes:
+    - /Users:/Users
+  hostname: hadoop
+  ports:
+    - "9000:9000" #hdfs name node client
+    - "50070:50070" #hdfs name node web ui
+    - "8088:8088" #yarn web ui
+    - "8032:8032" #yarn resource manager client
+    - "50075:50075"
+    - "50020:50020"
+    - "50090:50090"
+    - "50010:50010"
+    - "8030:8030"
+    - "55071:55071"
+    - "8031:8031"
+    - "8033:8033"
+    - "8040:8040"
+    - "8042:8042"
+    - "13562:13562"
+    - "10020:10020" #job history
+    - "19888:19888" #job history web ui
+
+druidbroker1:
+  image: banno/druid-broker:latest
+  links:
+    - zookeeper
+  ports:
+    - "8082:8082"
+  environment:
+    DRUID_JAVA_OPTIONS: -Xmx512M
+    druid_host: druidbroker1
+    druid_port: 8082
+    druid_zk_service_host: zookeeper:2181
+    druid_processing_buffer_sizeBytes: 52428800 #50 * 1024 * 1024
+
+druidbroker2:
+  image: banno/druid-broker:latest
+  links:
+    - zookeeper
+  ports:
+    - "8182:8182"
+  environment:
+    DRUID_JAVA_OPTIONS: -Xmx512M
+    druid_host: druidbroker2
+    druid_port: 8182
+    druid_zk_service_host: zookeeper:2181
+    druid_processing_buffer_sizeBytes: 52428800 #50 * 1024 * 1024
+
+druidcoordinator1:
+  image: banno/druid-coordinator:latest
+  links:
+    - zookeeper
+    - postgres
+  ports:
+    - "8081:8081"
+  environment:
+    DRUID_JAVA_OPTIONS: -Xmx512M
+    druid_host: druidcoordinator1
+    druid_port: 8081
+    druid_zk_service_host: zookeeper:2181
+    druid_metadata_storage_type: postgresql
+    druid_metadata_storage_connector_connectURI: jdbc:postgresql://postgres:5432/druid
+    druid_metadata_storage_connector_user: druid
+    druid_metadata_storage_connector_password: diurd
+    druid_coordinator_load_timeout: PT30S
+    druid_coordinator_startDelay: PT5S
+
+druidcoordinator2:
+  image: banno/druid-coordinator:latest
+  links:
+    - zookeeper
+    - postgres
+  ports:
+    - "8181:8181"
+  environment:
+    DRUID_JAVA_OPTIONS: -Xmx512M
+    druid_host: druidcoordinator2
+    druid_port: 8181
+    druid_zk_service_host: zookeeper:2181
+    druid_metadata_storage_type: postgresql
+    druid_metadata_storage_connector_connectURI: jdbc:postgresql://postgres:5432/druid
+    druid_metadata_storage_connector_user: druid
+    druid_metadata_storage_connector_password: diurd
+    druid_coordinator_load_timeout: PT30S
+    druid_coordinator_startDelay: PT5S
+
+druidhistorical1:
+  image: banno/druid-historical:latest
+  links:
+    - zookeeper
+    - hadoop
+  ports:
+    - "8083:8083"
+  environment:
+    DRUID_JAVA_OPTIONS: -Xmx512M
+    druid_host: druidhistorical1
+    druid_port: 8083
+    druid_zk_service_host: zookeeper:2181
+    druid_segmentCache_locations: "[{\"path\":\"/var/tmp/druid/indexCache\",\"maxSize\":5000000000}]"
+    druid_processing_buffer_sizeBytes: 52428800 #50 * 1024 * 1024
+    druid_server_maxSize: 5000000000
+    druid_storage_type: hdfs
+    druid_storage_storageDirectory: hdfs://hadoop:9000/druid
+
+druidhistorical2:
+  image: banno/druid-historical:latest
+  links:
+    - zookeeper
+    - hadoop
+  ports:
+    - "8183:8183"
+  environment:
+    DRUID_JAVA_OPTIONS: -Xmx512M
+    druid_host: druidhistorical2
+    druid_port: 8183
+    druid_zk_service_host: zookeeper:2181
+    druid_segmentCache_locations: "[{\"path\":\"/var/tmp/druid/indexCache\",\"maxSize\":5000000000}]"
+    druid_processing_buffer_sizeBytes: 52428800 #50 * 1024 * 1024
+    druid_server_maxSize: 5000000000
+    druid_storage_type: hdfs
+    druid_storage_storageDirectory: hdfs://hadoop:9000/druid
+
+druidoverlord1:
+  image: banno/druid-overlord:latest
+  links:
+    - zookeeper
+    - postgres
+    - hadoop
+  ports:
+    - "8085:8085"
+    - "8100:8100"
+    - "8101:8101"
+    - "8102:8102"
+    - "8103:8103"
+    - "8104:8104"
+    - "8105:8105"
+    - "8106:8106"
+    - "8107:8107"
+    - "8108:8108"
+    - "8109:8109"
+  volumes:
+    - /Users:/Users #for local firehose in batch index tasks
+  environment:
+    DRUID_JAVA_OPTIONS: -Xmx512M
+    druid_host: druidoverlord1
+    druid_port: 8085
+    druid_zk_service_host: zookeeper:2181
+    druid_metadata_storage_type: postgresql
+    druid_metadata_storage_connector_connectURI: jdbc:postgresql://postgres:5432/druid
+    druid_metadata_storage_connector_user: druid
+    druid_metadata_storage_connector_password: diurd
+    druid_indexer_runner_type: local
+    druid_indexer_storage_type: metadata
+    druid_indexer_queue_startDelay: PT0M
+    druid_indexer_runner_javaOpts: -server -Xmx256m
+    druid_indexer_runner_startPort: 8100
+    druid_indexer_fork_property_druid_processing_numThreads: 1
+    druid_indexer_fork_property_druid_computation_buffer_size: 100000000
+    druid_service: overlord
+    druid_processing_buffer_sizeBytes: 26214400 #25 * 1024 * 1024
+    druid_storage_type: hdfs
+    druid_storage_storageDirectory: hdfs://hadoop:9000/druid
+    druid_indexer_fork_property_druid_storage_type: hdfs
+    druid_indexer_fork_property_druid_storage_storageDirectory: hdfs://hadoop:9000/druid
+    druid_indexer_task_hadoopWorkingPath: hdfs://hadoop:9000/druid-working
+    druid_indexer_task_defaultHadoopCoordinates: "[\"org.apache.hadoop:hadoop-client:2.3.0\"]"
+
+druid:
+  image: ubuntu:14.04
+  command: echo "Druid rules"
+  links:
+    - druidbroker1
+    # - druidbroker2
+    - druidcoordinator1
+    # - druidcoordinator2
+    - druidhistorical1
+    - druidhistorical2
+    - druidoverlord1
+
+###################################################################################################
+# Mesos support below here
+
+dns:
+  build: ./dns
+  ports:
+    - "53:53"
+    - "53:53/udp"
+
+mesosmaster:
+  image: registry.banno-internal.com/mesos-master:latest
+  dns: 172.17.42.1
+  hostname: mesosmaster.dev.banno.com
+  ports:
+    - "5050:5050"
+  environment:
+    MESOS_ZK: zk://zookeeper:2181/mesos
+    MESOS_LOG_DIR: /var/log
+    MESOS_WORK_DIR: /mesos
+    MESOS_QUORUM: 1
+    MESOS_CLUSTER: development
+  links:
+    - dns
+    - zookeeper
+
+mesosslave1:
+  image: registry.banno-internal.com/mesos-slave:latest
+  dns: 172.17.42.1
+  hostname: mesosslave1.dev.banno.com
+  ports:
+    - "5151:5151"
+  environment:
+    MESOS_CONTAINERIZERS: docker
+    MESOS_DOCKER_STOP_TIMEOUT: 30secs
+    MESOS_LOG_DIR: /var/log
+    MESOS_MASTER: zk://192.168.59.103:2181/mesos
+    MESOS_WORK_DIR: /mesos
+    MESOS_PORT: "5151"
+    MESOS_HOSTNAME: mesosslave1.dev.banno.com
+    DOCKER_CERT_PATH:
+    DOCKER_HOST:
+    DOCKER_TLS_VERIFY:
+  volumes:
+    - /sys:/sys
+    - /Users:/Users
+  links:
+    - zookeeper
+
+mesosslave2:
+  image: registry.banno-internal.com/mesos-slave:latest
+  dns: 172.17.42.1
+  hostname: mesosslave2.dev.banno.com
+  ports:
+    - "5152:5152"
+  environment:
+    MESOS_CONTAINERIZERS: docker
+    MESOS_DOCKER_STOP_TIMEOUT: 30secs
+    MESOS_LOG_DIR: /var/log
+    MESOS_MASTER: zk://192.168.59.103:2181/mesos
+    MESOS_WORK_DIR: /mesos
+    MESOS_PORT: "5152"
+    MESOS_HOSTNAME: mesosslave2.dev.banno.com
+    DOCKER_CERT_PATH:
+    DOCKER_HOST:
+    DOCKER_TLS_VERIFY:
+  volumes:
+    - /sys:/sys
+    - /Users:/Users
+  links:
+    - zookeeper
+
+marathon:
+  image: mesosphere/marathon:v0.8.0
+  dns: 172.17.42.1
+  ports:
+    - "8080:8080"
+  command: --master zk://192.168.59.103:2181/mesos --zk zk://192.168.59.103:2181/marathon
+  links:
+    - zookeeper
+    - mesosmaster
+    - mesosslave1
+    - mesosslave2
+    - postgres
