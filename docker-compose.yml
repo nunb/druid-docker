@@ -4,12 +4,13 @@ zookeeper:
     - "2181:2181"
 
 postgres:
-  build: ./postgres
+        #build: ./postgres
+  image: twistdroach/postgres
   ports:
     - "5432:5432"
 
 hadoop: #used for both HDFS deep storage and Hadoop batch indexing
-  image: sequenceiq/hadoop-docker:2.4.1
+  image: twistdroach/hadoop
   #build: ./hadoop #putting hostname into core-site.xml is fixed in later versions, but not 2.3.0
   volumes:
     - /Users:/Users
@@ -105,7 +106,7 @@ druidhistorical1:
   ports:
     - "8083:8083"
   environment:
-    DRUID_JAVA_OPTIONS: -Xmx512M
+    DRUID_JAVA_OPTIONS: -Xmx512M -XX:MaxDirectMemorySize=6G
     druid_host: druidhistorical1
     druid_port: 8083
     druid_zk_service_host: zookeeper:2181
@@ -123,7 +124,7 @@ druidhistorical2:
   ports:
     - "8183:8183"
   environment:
-    DRUID_JAVA_OPTIONS: -Xmx512M
+    DRUID_JAVA_OPTIONS: -Xmx512M -XX:MaxDirectMemorySize=6G
     druid_host: druidhistorical2
     druid_port: 8183
     druid_zk_service_host: zookeeper:2181
@@ -177,99 +178,3 @@ druidoverlord1:
     druid_indexer_fork_property_druid_storage_storageDirectory: hdfs://hadoop:9000/druid
     druid_indexer_task_hadoopWorkingPath: hdfs://hadoop:9000/druid-working
     druid_indexer_task_defaultHadoopCoordinates: "[\"org.apache.hadoop:hadoop-client:2.3.0\"]"
-
-druid:
-  image: ubuntu:14.04
-  command: echo "Druid rules"
-  links:
-    - druidbroker1
-    # - druidbroker2
-    - druidcoordinator1
-    # - druidcoordinator2
-    - druidhistorical1
-    - druidhistorical2
-    - druidoverlord1
-
-###################################################################################################
-# Mesos support below here
-
-dns:
-  build: ./dns
-  ports:
-    - "53:53"
-    - "53:53/udp"
-
-mesosmaster:
-  image: registry.banno-internal.com/mesos-master:latest
-  dns: 172.17.42.1
-  hostname: mesosmaster.dev.banno.com
-  ports:
-    - "5050:5050"
-  environment:
-    MESOS_ZK: zk://zookeeper:2181/mesos
-    MESOS_LOG_DIR: /var/log
-    MESOS_WORK_DIR: /mesos
-    MESOS_QUORUM: 1
-    MESOS_CLUSTER: development
-  links:
-    - dns
-    - zookeeper
-
-mesosslave1:
-  image: registry.banno-internal.com/mesos-slave:latest
-  dns: 172.17.42.1
-  hostname: mesosslave1.dev.banno.com
-  ports:
-    - "5151:5151"
-  environment:
-    MESOS_CONTAINERIZERS: docker
-    MESOS_DOCKER_STOP_TIMEOUT: 30secs
-    MESOS_LOG_DIR: /var/log
-    MESOS_MASTER: zk://192.168.59.103:2181/mesos
-    MESOS_WORK_DIR: /mesos
-    MESOS_PORT: "5151"
-    MESOS_HOSTNAME: mesosslave1.dev.banno.com
-    DOCKER_CERT_PATH:
-    DOCKER_HOST:
-    DOCKER_TLS_VERIFY:
-  volumes:
-    - /sys:/sys
-    - /Users:/Users
-  links:
-    - zookeeper
-
-mesosslave2:
-  image: registry.banno-internal.com/mesos-slave:latest
-  dns: 172.17.42.1
-  hostname: mesosslave2.dev.banno.com
-  ports:
-    - "5152:5152"
-  environment:
-    MESOS_CONTAINERIZERS: docker
-    MESOS_DOCKER_STOP_TIMEOUT: 30secs
-    MESOS_LOG_DIR: /var/log
-    MESOS_MASTER: zk://192.168.59.103:2181/mesos
-    MESOS_WORK_DIR: /mesos
-    MESOS_PORT: "5152"
-    MESOS_HOSTNAME: mesosslave2.dev.banno.com
-    DOCKER_CERT_PATH:
-    DOCKER_HOST:
-    DOCKER_TLS_VERIFY:
-  volumes:
-    - /sys:/sys
-    - /Users:/Users
-  links:
-    - zookeeper
-
-marathon:
-  image: mesosphere/marathon:v0.8.0
-  dns: 172.17.42.1
-  ports:
-    - "8080:8080"
-  command: --master zk://192.168.59.103:2181/mesos --zk zk://192.168.59.103:2181/marathon
-  links:
-    - zookeeper
-    - mesosmaster
-    - mesosslave1
-    - mesosslave2
-    - postgres

@@ -2,13 +2,13 @@
 
 TAG="latest"
 
-fig build postgres
-fig build hadoop
+docker build -t twistdroach/postgres:$TAG postgres
+docker build -t twistdroach/hadoop:$TAG hadoop
 docker build -t banno/druid-base:$TAG base
 docker build -t banno/druid-hadoop-base:$TAG hadoop-base
 docker build -t banno/druid-broker:$TAG broker
 docker build -t banno/druid-coordinator:$TAG coordinator
 docker build -t banno/druid-historical:$TAG historical
-# docker build -t banno/druid-middle-manager:$TAG middle-manager
+docker build -t banno/druid-middle-manager:$TAG middle-manager
 docker build -t banno/druid-overlord:$TAG overlord
-# docker build -t banno/druid-realtime:$TAG realtime
+docker build -t banno/druid-realtime:$TAG realtime
