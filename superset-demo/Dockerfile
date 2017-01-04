@@ -1,6 +1,6 @@
 FROM ubuntu:14.04
 
-LABEL Description="Superset install integrated to druid docker instances""
+LABEL Description="Simple demo of superset"
 
 ENV PORT 8080
 ENV USERNAME admin
