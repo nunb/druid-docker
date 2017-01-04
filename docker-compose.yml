@@ -1,7 +1,7 @@
 zookeeper:
   image: jplock/zookeeper:3.4.6
-  ports:
-    - "2181:2181"
+  expose:
+    - "2181"
 
 postgres:
         #build: ./postgres
@@ -39,11 +39,11 @@ druidbroker1:
   links:
     - zookeeper
   ports:
-    - "8082:8082"
+    - "8081:8081"
   environment:
-    DRUID_JAVA_OPTIONS: -Xmx512M
+    DRUID_JAVA_OPTIONS: -Xmx512M -XX:MaxDirectMemorySize=6G
     druid_host: druidbroker1
-    druid_port: 8082
+    druid_port: 8081
     druid_zk_service_host: zookeeper:2181
     druid_processing_buffer_sizeBytes: 52428800 #50 * 1024 * 1024
 
@@ -52,25 +52,23 @@ druidbroker2:
   links:
     - zookeeper
   ports:
-    - "8182:8182"
+    - "8082:8082"
   environment:
-    DRUID_JAVA_OPTIONS: -Xmx512M
+    DRUID_JAVA_OPTIONS: -Xmx512M -XX:MaxDirectMemorySize=6G
     druid_host: druidbroker2
-    druid_port: 8182
+    druid_port: 8082
     druid_zk_service_host: zookeeper:2181
     druid_processing_buffer_sizeBytes: 52428800 #50 * 1024 * 1024
 
-druidcoordinator1:
+druidcoordinator:
   image: banno/druid-coordinator:latest
   links:
     - zookeeper
     - postgres
-  ports:
-    - "8081:8081"
+  expose:
+    - "8083"
   environment:
     DRUID_JAVA_OPTIONS: -Xmx512M
-    druid_host: druidcoordinator1
-    druid_port: 8081
     druid_zk_service_host: zookeeper:2181
     druid_metadata_storage_type: postgresql
     druid_metadata_storage_connector_connectURI: jdbc:postgresql://postgres:5432/druid
@@ -79,54 +77,15 @@ druidcoordinator1:
     druid_coordinator_load_timeout: PT30S
     druid_coordinator_startDelay: PT5S
 
-druidcoordinator2:
-  image: banno/druid-coordinator:latest
-  links:
-    - zookeeper
-    - postgres
-  ports:
-    - "8181:8181"
-  environment:
-    DRUID_JAVA_OPTIONS: -Xmx512M
-    druid_host: druidcoordinator2
-    druid_port: 8181
-    druid_zk_service_host: zookeeper:2181
-    druid_metadata_storage_type: postgresql
-    druid_metadata_storage_connector_connectURI: jdbc:postgresql://postgres:5432/druid
-    druid_metadata_storage_connector_user: druid
-    druid_metadata_storage_connector_password: diurd
-    druid_coordinator_load_timeout: PT30S
-    druid_coordinator_startDelay: PT5S
-
-druidhistorical1:
+druidhistorical:
   image: banno/druid-historical:latest
   links:
     - zookeeper
     - hadoop
-  ports:
-    - "8083:8083"
+  expose:
+    - "8083"
   environment:
     DRUID_JAVA_OPTIONS: -Xmx512M -XX:MaxDirectMemorySize=6G
-    druid_host: druidhistorical1
-    druid_port: 8083
-    druid_zk_service_host: zookeeper:2181
-    druid_segmentCache_locations: "[{\"path\":\"/var/tmp/druid/indexCache\",\"maxSize\":5000000000}]"
-    druid_processing_buffer_sizeBytes: 52428800 #50 * 1024 * 1024
-    druid_server_maxSize: 5000000000
-    druid_storage_type: hdfs
-    druid_storage_storageDirectory: hdfs://hadoop:9000/druid
-
-druidhistorical2:
-  image: banno/druid-historical:latest
-  links:
-    - zookeeper
-    - hadoop
-  ports:
-    - "8183:8183"
-  environment:
-    DRUID_JAVA_OPTIONS: -Xmx512M -XX:MaxDirectMemorySize=6G
-    druid_host: druidhistorical2
-    druid_port: 8183
     druid_zk_service_host: zookeeper:2181
     druid_segmentCache_locations: "[{\"path\":\"/var/tmp/druid/indexCache\",\"maxSize\":5000000000}]"
     druid_processing_buffer_sizeBytes: 52428800 #50 * 1024 * 1024
